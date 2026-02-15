@@ -1,0 +1,21 @@
+# requirements.txt
+
+# Машинное обучение
+tensorflow
+scikit-learn
+numpy
+joblib
+
+# Веб-интерфейс и API
+Flask
+Flask-SQLAlchemy
+Flask-Login
+
+# Сетевой анализ
+scapy
+
+# Визуализация и Дашборды
+pandas
+matplotlib
+streamlit
+plotly
