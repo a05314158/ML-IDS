@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Статистика Трафика{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h2">Статистика активности в сети <small class="text-muted">{{ title }}</small></h1>
+    <div>
+        <div class="btn-group">
+            <a href="{{ url_for('statistics', period='hour') }}" class="btn btn-outline-primary {% if active_period == 'hour' %}active{% endif %}">Час</a>
+            <a href="{{ url_for('statistics', period='day') }}" class="btn btn-outline-primary {% if active_period == 'day' %}active{% endif %}">День</a>
+            <a href="{{ url_for('statistics', period='week') }}" class="btn btn-outline-primary {% if active_period == 'week' %}active{% endif %}">Неделя</a>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        {% if stats %}
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th>Локальный IP</th>
+                            <th>Трафик (МБ)</th>
+                            <th>Протоколы</th>
+                            <th>Посещенные домены (пример)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for device in stats %}
+                        <tr>
+                            <td><strong>{{ device.local_ip }}</strong></td>
+                            <td>{{ device.total_mbytes }}</td>
+                            <td><small>{{ device.protocols }}</small></td>
+                            <td>
+                                <small>
+                                    {% for domain in device.domains %}
+                                        <span class="badge bg-secondary me-1 mb-1">{{ domain }}</span>
+                                    {% else %}
+                                        <span class="text-muted">Нет данных</span>
+                                    {% endfor %}
+                                </small>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="alert alert-info text-center">
+                <p class="mb-0">Нет данных о трафике за выбранный период.</p>
+                <p class="mb-0"><small>Убедитесь, что сборщик статистики (`worker.py`) запущен с правами администратора и правильным ID пользователя.</small></p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+    // Автоматическое обновление страницы каждые 30 секунд
+    setTimeout(() => {
+        window.location.reload();
+    }, 30000);
+</script>
+
+{% endblock %}

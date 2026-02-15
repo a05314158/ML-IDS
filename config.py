@@ -1,35 +1,27 @@
-# config.py (Полная и правильная версия)
-
+# config.py (ПОЛНАЯ ФИНАЛЬНАЯ ВЕРСИЯ)
 import os
 
 # --- Основные настройки ---
-TRAIN_DURATION_MINUTES = 10 # Время обучения в минутах
 TIME_WINDOW = 5             # Окно агрегации трафика в секундах (T)
 BPF_FILTER = "ip"           # Фильтр для Scapy, ловим весь IP-трафик
+TRAIN_DURATION_MINUTES = 2  # Время обучения в минутах (для ML-панели)
 
-# --- Настройки буфера и признаков ---
-MAX_BUFFER_SIZE = 10000
-NUM_FEATURES = 13
-BURST_WINDOW_SECONDS = 0.1
-
-# --- Настройки путей (остаются для совместимости) ---
+# --- Настройки ML-моделей ---
 MODEL_DIR = "models"
-# Замечание: TensorFlow сохраняет модели в своем формате (как папку),
-# поэтому MODEL_PATH теперь указывает на директорию.
-MODEL_PATH = os.path.join(MODEL_DIR, "tf_autoencoder_model")
-SCALER_PATH = os.path.join(MODEL_DIR, "standard_scaler.joblib")
-INITIAL_THRESHOLD_PATH = os.path.join(MODEL_DIR, "initial_threshold.joblib")
+NUM_FEATURES = 13
+CONTAMINATION = 0.035 # Для Isolation Forest
+# --- ВОЗВРАЩАЕМ НЕДОСТАЮЩУЮ НАСТРОЙКУ ---
+BURST_WINDOW_SECONDS = 0.1 # Временное окно для расчета "Burst_Rate"
+# ----------------------------------------
 
 # --- Настройки TensorFlow Автоэнкодера ---
-NN_EPOCHS = 100              # Эпох может быть меньше, TF учится эффективнее
-NN_LEARNING_RATE = 0.001       # Скорость обучения для Adam
-NN_BATCH_SIZE = 32             # Размер пакета данных на одной итерации обучения
-NN_HIDDEN_LAYER_SIZE = 6       # Размер сжатого слоя (должен быть < NUM_FEATURES)
+NN_EPOCHS = 100
+NN_LEARNING_RATE = 0.001
+NN_BATCH_SIZE = 32
+NN_HIDDEN_LAYER_SIZE = 6
 
-# --- Настройки АДАПТИВНОГО ПОРОГА (для Автоэнкодера) ---
+# --- Настройки АДАПТИВНОГО ПОРОГА ---
 SCORE_HISTORY_SIZE = 300
-ADAPTIVE_THRESHOLD_PERCENTILE = 98.0 # Ищем выбросы с высокой ошибкой
+ADAPTIVE_THRESHOLD_PERCENTILE_IF = 2.0  # Для Isolation Forest (ищем низкие значения)
+ADAPTIVE_THRESHOLD_PERCENTILE_TF = 98.0 # Для TensorFlow (ищем высокие значения)
 
-# --- Устаревшая настройка (нужна для worker.py, но не используется в TF) ---
-# worker.py все еще импортирует CONTAMINATION, оставим его, чтобы избежать ошибок.
-CONTAMINATION = 0.035

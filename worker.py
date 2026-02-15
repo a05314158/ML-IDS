@@ -1,181 +1,183 @@
-# worker.py (обновленная версия)
-
-import threading
+# worker.py (ФИНАЛЬНАЯ УПРОЩЕННАЯ ВЕРСИЯ)
 import time
 from datetime import datetime
-from collections import deque
+from collections import deque, defaultdict
 import numpy as np
+import ipaddress
+import os
+import json
+import traceback
 
-from config import (BPF_FILTER, TIME_WINDOW, SCORE_HISTORY_SIZE, ADAPTIVE_THRESHOLD_PERCENTILE)
+from config import *
 from sniffer import PacketSniffer
 from feature_engineer import extract_features
-# --- ИЗМЕНЕНИЕ: Импортируем оба класса детекторов ---
 from ml_model import IsolationForestDetector, TFAutoencoderDetector
-# ---------------------------------------------------
-from scapy.all import conf
+from scapy.all import get_if_list
 
 
-class MLIDS_Worker:
-    def __init__(self):
-        self.lock = threading.Lock()
-        self.status = {
-            "is_running": False, "mode": "Остановлено", "log": deque(maxlen=200),
-            "interface": None, "current_score": 0.0, "adaptive_threshold": -0.1, "is_anomaly": False,
-            "model_id": None
-        }
-        self.ml_thread = None
-        self._stop_event = threading.Event()
+def is_local_ip(ip_str: str) -> bool:
+    try:
+        return ipaddress.ip_address(ip_str).is_private
+    except ValueError:
+        return False
 
-    def _log(self, message, category='info'):
-        with self.lock:
-            timestamp = datetime.now().strftime('%H:%M:%S')
-            self.status["log"].appendleft(f"[{timestamp}] [{category.upper()}] {message}")
 
-    def get_status(self):
-        with self.lock:
-            status_copy = self.status.copy()
-            status_copy["log"] = list(self.status["log"])
-            return status_copy
+def run_main_worker():
+    from app import app, db, Model, TrafficLog, ActiveState
 
-    def stop_current_session(self):
-        if self.status["is_running"]:
-            self._stop_event.set()
-            self._log("Получен сигнал на остановку...", "warning")
+    print("[WORKER] Запуск главного воркера...")
 
-    # --- ИЗМЕНЕНИЕ: Сигнатура функции ---
-    def start_training_session(self, iface_str, model_path, scaler_path, training_duration_minutes, model_type):
-        if self.status["is_running"]: return
-        self._stop_event.clear()
-        self.ml_thread = threading.Thread(target=self._training_loop,
-                                          args=(
-                                          iface_str, model_path, scaler_path, training_duration_minutes, model_type),
-                                          daemon=True)
-        self.ml_thread.start()
+    sniffer = None
+    ml_detector = None
+    active_model_in_memory = None
 
-    def _training_loop(self, iface_str, model_path, scaler_path, training_duration_minutes, model_type):
-        with self.lock:
-            self.status.update(
-                {"is_running": True, "mode": f"Обучение ({model_type})", "log": deque(maxlen=200),
-                 "interface": iface_str, "model_id": None})
-        self._log(f"Начало сессии обучения (тип: {model_type})", "info")
+    local_status = {
+        "log": deque(maxlen=50), "mode": "Инициализация...", "interface": None,
+        "is_running": True, "model_id": None, "current_score": 0.0,
+        "adaptive_threshold": -0.1, "is_anomaly": False,
+    }
 
-        sniffer = None
+    def _log(message, category='info'):
+        timestamp = datetime.now().strftime('%H:%M:%S')
+        log_line = f"[{timestamp}] [{category.upper()}] {message}"
+        local_status["log"].appendleft(log_line)
+        print(log_line)
+
+    while True:
         try:
-            # --- ИЗМЕНЕНИЕ: Выбираем нужный класс детектора ---
-            if model_type == 'tensorflow':
-                detector = TFAutoencoderDetector()
-            else:  # По умолчанию используем isolation_forest
-                detector = IsolationForestDetector()
-            # ------------------------------------------------
+            with app.app_context():
+                # 1. Логика обучения (если есть необученные модели)
+                untrained_model = Model.query.filter_by(model_path=None).first()
+                if untrained_model:
+                    _log(f"Начинаю обучение модели: '{untrained_model.name}' (тип: {untrained_model.model_type})")
+                    local_status["mode"] = f"Обучение ({untrained_model.model_type})"
 
-            sniffer = PacketSniffer()
-            iface_obj = next((i for i in conf.ifaces.values() if str(i) == iface_str), None)
-            if not iface_obj: raise ValueError(f"Интерфейс {iface_str} не найден")
+                    train_iface = get_if_list()[0]
+                    _log(f"Использую интерфейс '{train_iface}' для сбора данных.")
+                    train_sniffer = PacketSniffer()
+                    train_sniffer.set_config(train_iface, BPF_FILTER)
+                    train_sniffer.start_sniffing()
 
-            sniffer.set_config(iface_obj, BPF_FILTER)
-            sniffer.start_sniffing()
+                    X_train_list, num_cycles = [], (TRAIN_DURATION_MINUTES * 60) // TIME_WINDOW
+                    for i in range(num_cycles):
+                        time.sleep(TIME_WINDOW)
+                        snapshot = train_sniffer.get_and_clear_buffer()
+                        if not snapshot: continue
+                        X_train_list.append(extract_features(snapshot, datetime.now()).features)
+                        _log(f"Сбор данных для обучения: {i + 1}/{num_cycles}")
+                    train_sniffer.stop_sniffing()
 
-            X_train_list, num_cycles = [], (training_duration_minutes * 60) // TIME_WINDOW
-            for i in range(num_cycles):
-                if self._stop_event.is_set():
-                    self._log("Обучение прервано.");
-                    break
-                time.sleep(TIME_WINDOW)
-                snapshot = sniffer.get_and_clear_buffer()
-                if not snapshot: continue  # Пропускаем пустые окна
-                X_train_list.append(extract_features(snapshot, datetime.now()).features)
-                self._log(f"Сбор данных: {i + 1}/{num_cycles}", "info")
+                    if len(X_train_list) < 2:
+                        _log("Недостаточно данных для обучения. Модель удалена.", "danger")
+                        db.session.delete(untrained_model)
+                    else:
+                        detector = TFAutoencoderDetector() if untrained_model.model_type == 'tensorflow' else IsolationForestDetector()
+                        user_model_dir = os.path.join('models', 'system')
+                        os.makedirs(user_model_dir, exist_ok=True)
+                        base_filename = f'{untrained_model.model_type}_{datetime.utcnow().strftime("%Y%m%d%H%M%S")}'
+                        model_path = os.path.join(user_model_dir, base_filename)
+                        scaler_path = f"{model_path}_scaler.joblib"
+                        detector.train_and_save_model(np.array(X_train_list), model_path, scaler_path)
 
-            if not self._stop_event.is_set():
-                if len(X_train_list) < 2: raise ValueError("Собрано недостаточно данных для обучения.")
+                        untrained_model.model_path = model_path
+                        untrained_model.timestamp = datetime.utcnow()
+                        _log(f"Обучение модели '{untrained_model.name}' завершено.", "success")
+                    db.session.commit()
+                    continue
 
-                self._log("Обучение модели...", "info")
-                detector.train_and_save_model(np.array(X_train_list), model_path, scaler_path)
-                self._log("Обучение завершено.", "success")
+                # 2. Логика Мониторинга
+                active_state_from_db = db.session.get(ActiveState, 1) or ActiveState(id=1)
+
+                is_monitoring_active_in_db = active_state_from_db.is_monitoring
+                is_monitoring_active_in_memory = ml_detector is not None
+
+                if is_monitoring_active_in_db != is_monitoring_active_in_memory or \
+                        (is_monitoring_active_in_db and active_state_from_db.active_model_id != (
+                        active_model_in_memory.id if active_model_in_memory else None)):
+
+                    if is_monitoring_active_in_db:
+                        _log("Запускаем/переключаем ML-мониторинг...")
+                        active_model = db.session.get(Model, active_state_from_db.active_model_id)
+                        if active_model and active_model.model_path:
+                            detector = TFAutoencoderDetector() if active_model.model_type == 'tensorflow' else IsolationForestDetector()
+                            scaler_path = f"{active_model.model_path}_scaler.joblib"
+                            if detector.load_model(active_model.model_path, scaler_path):
+                                ml_detector = detector
+                                active_model_in_memory = active_model
+                                local_status["mode"] = f"Мониторинг ({active_model.model_type})"
+                                local_status["model_id"] = active_model.id
+                                _log(f"Модель '{active_model.name}' успешно загружена и активна.", "success")
+                            else:
+                                _log(f"Ошибка загрузки модели ID {active_model.id}", "danger");
+                                ml_detector = None
+                    else:
+                        _log("Останавливаем ML-мониторинг.")
+                        ml_detector = None;
+                        active_model_in_memory = None
+                        local_status["mode"] = "Сбор статистики";
+                        local_status["model_id"] = None
+
+                # 3. Постоянный сбор статистики
+                current_iface = active_state_from_db.interface or (get_if_list()[0] if get_if_list() else None)
+                if current_iface and (not sniffer or not sniffer.is_running or sniffer.iface_to_use != current_iface):
+                    if sniffer: sniffer.stop_sniffing()
+                    sniffer = PacketSniffer()
+                    sniffer.set_config(current_iface, "ip or udp port 53")
+                    sniffer.start_sniffing()
+                    local_status["interface"] = current_iface
+                    if not ml_detector: local_status["mode"] = "Сбор статистики"
+                    _log(f"Сборщик трафика запущен на интерфейсе {current_iface}")
+
+                if sniffer and sniffer.is_running:
+                    snapshot = sniffer.get_and_clear_buffer()
+                    if snapshot:
+                        # 3a. Сбор статистики
+                        device_stats = defaultdict(
+                            lambda: {"bytes": 0, "packets": 0, "protocols": set(), "domains": set()})
+                        for packet in snapshot:
+                            local_ip = None
+                            if is_local_ip(packet.src_ip):
+                                local_ip = packet.src_ip
+                            elif is_local_ip(packet.dst_ip):
+                                local_ip = packet.dst_ip
+                            if local_ip:
+                                stats = device_stats[local_ip]
+                                stats["bytes"] += packet.length;
+                                stats["packets"] += 1
+                                stats["protocols"].add(packet.protocol)
+                                if packet.domain: stats["domains"].add(packet.domain)
+
+                        if device_stats:
+                            for ip, stats in device_stats.items():
+                                db.session.add(TrafficLog(local_ip=ip, total_bytes=stats["bytes"],
+                                                          packet_count=stats["packets"],
+                                                          protocols=','.join(stats["protocols"]),
+                                                          domains=','.join(stats["domains"])))
+
+                        # 3b. ML-Предсказание
+                        if ml_detector:
+                            feature_vector_obj = extract_features(snapshot, datetime.now())
+                            anomaly_score = ml_detector.predict(feature_vector_obj.get_ml_vector())
+                            is_alert = (
+                                        anomaly_score > ml_detector.initial_threshold) if active_model_in_memory.model_type == 'tensorflow' else (
+                                        anomaly_score < ml_detector.initial_threshold)
+                            local_status.update({"current_score": float(anomaly_score), "is_anomaly": bool(is_alert)})
+                            if is_alert: _log(f"АНОМАЛИЯ! Score: {anomaly_score:.4f}", "danger")
+
+                # 4. Запись статуса в БД
+                status_to_write = local_status.copy()
+                status_to_write["log"] = list(status_to_write["log"])
+                active_state_from_db.worker_status_json = json.dumps(status_to_write)
+                db.session.commit()
+
         except Exception as e:
-            self._log(f"КРИТИЧЕСКАЯ ОШИБКА: {e}", "danger")
-        finally:
-            if sniffer and sniffer.is_running: sniffer.stop_sniffing()
-            with self.lock:
-                self.status.update({"is_running": False, "mode": "Остановлено", "interface": None, "model_id": None})
-            self._log("Сессия обучения завершена.", "info")
-
-    def start_monitoring_session(self, iface_str, model_id, model_path, scaler_path, model_type):
-        if self.status["is_running"]: return
-        self._stop_event.clear()
-        self.ml_thread = threading.Thread(target=self._monitoring_loop,
-                                          args=(iface_str, model_id, model_path, scaler_path, model_type), daemon=True)
-        self.ml_thread.start()
-
-    def _monitoring_loop(self, iface_str, model_id, model_path, scaler_path, model_type):
-        with self.lock:
-            self.status.update({
-                "is_running": True, "mode": f"Мониторинг ({model_type})", "log": deque(maxlen=200),
-                "interface": iface_str,
-                "current_score": 0.0, "is_anomaly": False, "model_id": model_id})
-        self._log(f"Начало сессии мониторинга с моделью ID: {model_id} (тип: {model_type})", "info")
-
-        sniffer = None
-        try:
-            # --- ИЗМЕНЕНИЕ: Снова выбираем нужный детектор ---
-            if model_type == 'tensorflow':
-                detector = TFAutoencoderDetector()
-            else:
-                detector = IsolationForestDetector()
-            # -----------------------------------------------
-
-            if not detector.load_model(model_path, scaler_path):
-                raise ValueError("Не удалось загрузить указанную модель.")
-
-            iface_obj = next((i for i in conf.ifaces.values() if str(i) == iface_str), None)
-            if not iface_obj: raise ValueError(f"Интерфейс {iface_str} не найден")
-
-            sniffer = PacketSniffer()
-            sniffer.set_config(iface_obj, BPF_FILTER)
-            sniffer.start_sniffing()
-
-            score_history = deque(maxlen=SCORE_HISTORY_SIZE)
-            permanent_floor_threshold = detector.initial_threshold
-            with self.lock:
-                self.status["adaptive_threshold"] = float(permanent_floor_threshold)
-
-            while not self._stop_event.is_set():
-                time.sleep(TIME_WINDOW)
-                packet_snapshot = sniffer.get_and_clear_buffer()
-                if not packet_snapshot: continue
-
-                feature_vector_obj = extract_features(packet_snapshot, datetime.now())
-                anomaly_score = detector.predict(feature_vector_obj.get_ml_vector())
-
-                with self.lock:
-                    current_adaptive_threshold = self.status["adaptive_threshold"]
-
-                    # --- ИЗМЕНЕНИЕ: Разная логика для разных моделей! ---
-                    if model_type == 'tensorflow':
-                        is_alert = anomaly_score > current_adaptive_threshold
-                    else:  # isolation_forest
-                        is_alert = anomaly_score < current_adaptive_threshold
-                    # ----------------------------------------------------
-
-                    if not is_alert:
-                        score_history.append(anomaly_score)
-                        # Пересчитываем адаптивный порог
-                        percentile = 98.0 if model_type == 'tensorflow' else 2.0  # Разные перцентили
-                        new_adaptive_threshold = np.percentile(list(score_history), percentile)
-                        self.status["adaptive_threshold"] = float(new_adaptive_threshold)
-
-                    self.status.update({
-                        "current_score": float(anomaly_score),
-                        "is_anomaly": bool(is_alert)
-                    })
-                    if is_alert: self._log(f"АНОМАЛИЯ! Score: {anomaly_score:.4f}", "danger")
-        except Exception as e:
-            import traceback
+            print("--- КРИТИЧЕСКАЯ ОШИБКА ВОРКЕРА ---")
             traceback.print_exc()
-            self._log(f"КРИТИЧЕСКАЯ ОШИБКА: {e}", "danger")
-        finally:
-            if sniffer and sniffer.is_running: sniffer.stop_sniffing()
-            with self.lock:
-                self.status.update({"is_running": False, "mode": "Остановлено", "interface": None, "model_id": None})
-            self._log("Сессия мониторинга завершена.", "info")
+            print("---------------------------------")
+
+        time.sleep(TIME_WINDOW)
+
+
+if __name__ == '__main__':
+    run_main_worker()
 
