@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container-fluid py-4" style="min-height: 90vh;">
+    <div class="d-flex justify-content-between align-items-end mb-5">
+        <div>
+            <h2 class="fw-bolder mb-1"><i class="fa-solid fa-user-shield me-3 text-primary"></i>Именной Аудит Активности</h2>
+            <p class="text-muted small text-uppercase letter-spacing-1">Live Behavioral Analysis Platform - Вскрытие SSL трафика (SNI)</p>
+        </div>
+        <div class="ids-card px-4 py-2 border-primary border-opacity-25 bg-primary bg-opacity-10 d-none d-md-block">
+            <span class="text-primary small fw-bold">SESSION RECORDING ACTIVE</span>
+        </div>
+    </div>
+
+    <div class="row g-5">
+        <!-- СЛЕВА: ДЕТАЛЬНАЯ ТАБЛИЦА СЕССИЙ -->
+        <div class="col-xl-8">
+            <div class="ids-card p-0 overflow-hidden shadow-lg h-100 border-opacity-25">
+                <div class="p-3 border-bottom border-secondary border-opacity-25 d-flex justify-content-between align-items-center" style="background: rgba(0,0,0,0.1);">
+                    <span class="ids-tiny-label opacity-75">Аудируемые объекты сетевых потоков</span>
+                    <span class="badge bg-success opacity-75">ML DPI</span>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-borderless table-hover mb-0 align-middle">
+                        <thead style="background: rgba(255,255,255,0.02); border-bottom: 1px solid var(--ids-border);">
+                            <tr class="ids-tiny-label">
+                                <th class="ps-4 py-3 text-muted">Хост источника (Узел)</th>
+                                <th class="py-3 text-muted">Таргетируемый Ресурс (Web)</th>
+                                <th class="py-3 text-muted">Паттерн Категории</th>
+                                <th class="text-end pe-4 py-3 text-muted">Замеченное Время сессии</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for d in details %}
+                            <tr style="height: 65px; border-bottom: 1px solid rgba(255,255,255,0.03);">
+                                <td class="ps-4">
+                                    <div class="d-flex align-items-center">
+                                        <div class="bg-primary bg-opacity-10 p-2 rounded-3 me-3 text-primary" style="width: 32px; height: 32px; text-align:center;">
+                                            <i class="fa-solid fa-server small"></i>
+                                        </div>
+                                        <span class="fw-bold mono-font" style="font-size:13px;">{{ d.ip }}</span>
+                                    </div>
+                                </td>
+                                <td class="fw-bold opacity-75">{{ d.domain }}</td>
+                                <td>
+                                    {% if d.cat == 'Work' %}<span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 px-2 py-1"><i class="fa-solid fa-briefcase me-1"></i> Business</span>
+                                    {% elif d.cat == 'Social' %}<span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25 px-2 py-1"><i class="fa-solid fa-mobile-button me-1"></i> Distraction</span>
+                                    {% else %}<span class="badge bg-secondary bg-opacity-10 text-muted border border-secondary px-2 py-1"><i class="fa-solid fa-network-wired me-1"></i> SysTraffic</span>{% endif %}
+                                </td>
+                                <td class="text-end pe-4">
+                                    <span class="fw-bold text-primary">{{ (d.t // 60) }}м <small class="text-muted">{{ d.t % 60 }}с</small></span>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr><td colspan="4" class="text-center py-5 text-muted opacity-50"><i class="fa-solid fa-bed fs-3 mb-2 d-block"></i> Нет сетевой активности. Интеллект собирает данные...</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- СПРАВА: КРУГОВАЯ СВОДНАЯ МАТРИЦА Chart.JS -->
+        <div class="col-xl-4 d-flex flex-column gap-4">
+            <div class="ids-card p-4 text-center">
+                <label class="ids-tiny-label mb-4 d-block opacity-75">ГРАДАЦИЯ ПОВЕДЕНЧЕСКИХ ЯДЕР</label>
+                <div class="px-3" style="position:relative;">
+                   <canvas id="prodChart" style="max-height: 250px;"></canvas>
+                </div>
+                <div class="mt-4 pt-4 border-top border-secondary border-opacity-25 d-flex justify-content-around">
+                    <div>
+                        <div class="ids-tiny-label opacity-50 mb-1">ФРЕЙМОВ В БД</div>
+                        <div class="h5 fw-bold mb-0 mono-font text-info">{{ details|length }}</div>
+                    </div>
+                    <div class="border-start border-secondary border-opacity-25"></div>
+                    <div>
+                        <div class="ids-tiny-label opacity-50 mb-1">TRUST LAYER</div>
+                        <div class="h5 fw-bold mb-0 text-success">Verified</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ИНФОРМАЦИЯ О СТЕКЕ (DPI/TLS Fingerprinting Info) -->
+            <div class="ids-card p-4 bg-primary bg-opacity-5 border-primary border-opacity-10 flex-grow-1 shadow-none">
+                <h6 class="ids-tiny-label text-primary mb-3"><i class="fa-solid fa-circle-info me-2"></i>СПРАВОЧНАЯ ДОКТРИНА ОСНОВЫ ML</h6>
+                <p class="small text-muted" style="line-height: 1.6;">
+                    Нейронная сеть <b>(ML-IDS DPI Module)</b> агрегирует <b>TLS Handshake Hello Packets</b>. Захватывая поля `Server Name Indicator` напрямую через обход бинарной сборки TCP, воркер фиксирует корпоративную активность, формируя цифровой отпечаток на лету (ZeroTrust Pipeline).
+                </p>
+                <button class="btn btn-outline-primary w-100 py-2 mt-2 fw-bold disabled" style="font-size: 11px; letter-spacing:1px; border-radius: 8px;">EXPORT PDF (Enterprise Only)</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    const cLabels = [{% for c in cat_stats %}"{{ c.category }}",{% endfor %}];
+    const cData = [{% for c in cat_stats %}{{ c.t // 60 }},{% endfor %}];
+
+    // Fallback graph config to make it look epic if there is no activity
+    if(cData.length === 0) { cLabels.push("No Network Streams Active"); cData.push(1); }
+
+    new Chart(document.getElementById('prodChart'), {
+        type: 'doughnut',
+        data: {
+            labels: cLabels,
+            datasets: [{
+                data: cData,
+                backgroundColor: cLabels.includes("No Network Streams Active") ? ['#1f2328'] : ['#2f81f7', '#3fb950', '#f85149', '#8b949e', '#f2cc60'],
+                borderWidth: cLabels.includes("No Network Streams Active") ? 0 : 2,
+                borderColor: '#161b22', hoverOffset: 8
+            }]
+        },
+        options: {
+            cutout: '80%',
+            plugins: {
+                legend: { position: 'bottom', labels: { color: 'var(--ids-text-body)', padding:20, font: { size: 10, weight: '700', family: 'Plus Jakarta Sans'} } },
+                tooltip: { callbacks: { label: function(c){ return " "+c.parsed+" MIN"} } }
+            }
+        }
+    });
+</script>
+{% endblock %}

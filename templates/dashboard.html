@@ -1,0 +1,262 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="soc-viewport">
+
+    <!-- 1. ВЕРХНИЕ ИНДИКАТОРЫ (KPI) -->
+    <div class="kpi-grid">
+        {% for lab, id, unit, color in [
+            ('Пакетов Проверено', 'stat-packets', 'Pkts', 'text-info'),
+            ('Объем Потока', 'stat-bytes', 'MB', 'text-primary'),
+            ('Уровень Угрозы', 'stat-score-max', 'Score', 'text-warning'),
+            ('Мониторинг сети', 'stat-interface', 'Active', 'text-success')
+        ] %}
+        <div class="kpi-card ids-card">
+            <div class="kpi-content">
+                <span class="kpi-label">{{ lab }}</span>
+                <div class="d-flex align-items-baseline gap-2">
+                    <span class="kpi-val {{ color }}" id="{{ id }}">0</span>
+                    <span class="kpi-unit">{{ unit }}</span>
+                </div>
+            </div>
+            <div class="kpi-icon-box"><i class="fa-solid fa-bolt-lightning opacity-25"></i></div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="main-soc-container mt-4">
+
+        <!-- SIDEBAR -->
+        <aside class="sidebar-pnl ids-card">
+            <h6 class="pnl-header"><i class="fa-solid fa-microchip text-primary me-2"></i> ML-STATION CONTROL</h6>
+
+            <div class="p-3 overflow-auto flex-grow-1">
+                <label class="ids-tiny-label mb-2">INTERFACE LINK (Физический уровень)</label>
+                <select id="interface-select" class="form-select soc-select mb-4">
+                    {% for iface in interfaces %}
+                        <option value="{{ iface.value }}" {% if active_state.interface == iface.value %}selected{% endif %}>{{ iface.name }}</option>
+                    {% endfor %}
+                </select>
+
+                <div class="learn-deploy-zone mb-4 shadow-sm">
+                    <label class="ids-tiny-label text-primary mb-2">PROVISION CORE (Обучить сеть)</label>
+                    <input type="text" id="model-name-input" class="soc-input mb-3" placeholder="Namespace ID (Имя сети)...">
+
+                    <label class="ids-tiny-label opacity-50 mb-1">SELECT ALGORITHM (Модель ядра)</label>
+                    <select id="model-type-select" class="form-select soc-select-mini mb-3">
+                        <option value="tensorflow">Deep Autoencoder (Точность)</option>
+                        <option value="isolation_forest">Isolation Forest (Статистика)</option>
+                    </select>
+
+                    <button class="btn btn-ids-primary w-100 fw-bold btn-sm py-2 shadow" id="create-model-btn">РАЗВЕРНУТЬ ML СТАНЦИЮ</button>
+                </div>
+
+                <label class="ids-tiny-label opacity-50 mb-3 d-block">MANAGED OBJECTS (Ваши модули)</label>
+                <div id="models-list">
+                    {% for m in models %}
+                    <div class="module-row {% if m.is_active %}active{% endif %} mb-2">
+                        <div class="text-truncate flex-grow-1">
+                            <span class="d-block small fw-bold text-white text-truncate">{{ m.name }}</span>
+                            {% if m.progress >= 0 and m.progress < 100 %}
+                                <div class="progress mt-1 mb-1" style="height: 3px;">
+                                    <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary" role="progressbar" style="width: {{ m.progress }}%;"></div>
+                                </div>
+                                <span class="tiny-op text-info uppercase">Train Mode {{ m.progress }}%</span>
+                            {% elif m.progress == -1 %}
+                                <span class="tiny-op text-danger uppercase">FAULT KERNEL ERRR</span>
+                            {% else %}
+                                <span class="tiny-op text-success uppercase">{{ m.model_type }} • ONLINE READY</span>
+                            {% endif %}
+                        </div>
+                        <div class="d-flex gap-2 ms-3">
+                            {% if m.progress == 100 %}
+                            <button class="btn-icon-soc activate-btn text-success" data-id="{{ m.id }}"><i class="fa-solid fa-play"></i></button>
+                            {% endif %}
+                            <button class="btn-icon-soc text-danger delete-btn" data-id="{{ m.id }}"><i class="fa-solid fa-xmark"></i></button>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </aside>
+
+        <!-- ЦЕНТРАЛЬНАЯ КОНСОЛЬ -->
+        <main class="monitor-wing">
+            <div class="graph-card ids-card">
+                <div class="card-pnl-header d-flex justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div id="live-dot" class="dot-led"></div>
+                        <span id="status-mode-text" class="status-mode">READY STANDBY</span>
+                    </div>
+                    <button id="btn-shutdown" class="btn btn-danger btn-xs px-3 shadow-sm" style="display:none; font-size:10px; font-weight:800; border-radius:6px; padding-top:6px; padding-bottom:6px;">KILL ACTIVE KERNEL SERVICE</button>
+                </div>
+                <div class="graph-box position-relative" style="height: 350px;">
+                    <canvas id="idsChart"></canvas>
+                </div>
+            </div>
+
+            <div class="terminal-card ids-card mt-4">
+                <div class="terminal-header bg-dark bg-opacity-50">
+                    <span class="ids-tiny-label text-success"><i class="fa-solid fa-terminal me-2"></i> SECURITY INTEL FEED LOGS</span>
+                </div>
+                <div id="realtime-logs" class="terminal-body scrollable-ids" style="height: 250px;">
+                    <!-- Журнал событий парсится JS -->
+                </div>
+            </div>
+        </main>
+
+    </div>
+</div>
+
+<style>
+    .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+    .kpi-card { padding: 18px 22px; display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid rgba(47, 129, 247, 0.1) !important; }
+    .kpi-label { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; display: block; margin-bottom: 3px; }
+    .kpi-val { font-family: 'JetBrains Mono', monospace; font-size: 1.6rem; font-weight: 700; line-height: 1; }
+    .kpi-unit { font-size: 11px; opacity: 0.5; font-weight: 600; }
+    .kpi-icon-box { font-size: 30px; }
+
+    .main-soc-container { display: flex; flex: 1; gap: 25px; min-height: 600px;}
+    .sidebar-pnl { width: 340px; display: flex; flex-direction: column; overflow: hidden; }
+    .monitor-wing { flex: 1; display: flex; flex-direction: column;}
+
+    .pnl-header { padding: 18px 20px; background: rgba(0,0,0,0.1); border-bottom: 1px solid var(--ids-border); font-size: 11px; font-weight: 800; letter-spacing: 1px; margin:0;}
+    .learn-deploy-zone { background: rgba(47, 129, 247, 0.04); padding: 20px; border-radius: 12px; border: 1px solid rgba(47, 129, 247, 0.1); }
+    .soc-input { background: transparent; border: none; border-bottom: 2px solid var(--ids-border); width: 100%; color: var(--ids-text-head); padding: 6px 0; font-size: 13px; font-family:'JetBrains Mono';}
+    .soc-input:focus { outline: none; border-color: var(--ids-accent); }
+    .soc-select { background: rgba(0,0,0,0.2); border: 1px solid var(--ids-border); color: var(--ids-text-body); font-size: 12px; padding: 10px; border-radius: 8px; }
+    .soc-select-mini { background: none !important; border: none !important; padding: 0 !important; font-size: 11px !important; color:var(--ids-text-body) !important; font-weight:700;}
+
+    .module-row { padding: 12px 15px; background: rgba(110, 118, 129, 0.05); border-radius: 10px; display:flex; border-left: 3px solid transparent; transition: 0.3s; align-items:center; }
+    .module-row.active { background: rgba(53, 134, 255, 0.08); border-left-color: var(--ids-accent); }
+    .btn-icon-soc { background: transparent; border: none; cursor: pointer; transition: 0.2s; font-size: 14px;}
+    .btn-icon-soc.activate-btn:hover { color: #3fb950 !important; }
+
+    .graph-card { padding: 0 !important; display: flex; flex-direction: column; }
+    .card-pnl-header { padding: 15px 20px; border-bottom: 1px solid var(--ids-border); }
+    .graph-box { flex: 1; padding: 20px; width:100%; height:100%; min-height: 250px; }
+
+    .terminal-card { display: flex; flex-direction: column; overflow: hidden; background: #000 !important; border-radius: 16px; padding:0!important; }
+    .terminal-header { padding: 12px 20px; border-bottom: 1px solid var(--ids-border); }
+    .terminal-body { padding: 15px 20px; font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: #7ee787; line-height: 1.6; overflow-y: auto; }
+
+    .status-mode { font-size: 12px; font-weight: 900; letter-spacing: 2px; }
+    .dot-led { width: 10px; height: 10px; border-radius: 50%; background: #484f58; transition: 0.3s; }
+    .dot-led.active { background: #3fb950; box-shadow: 0 0 10px #3fb950; animation: blinkIDS 2s infinite; }
+    .dot-led.alarm { background: #f85149; box-shadow: 0 0 12px #f85149; animation: fastblinkIDS 0.5s infinite; }
+    @keyframes blinkIDS { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
+    @keyframes fastblinkIDS { 0% { transform: scale(1); } 50% { transform: scale(1.3); } 100% { transform: scale(1); } }
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    const idsCtx = document.getElementById('idsChart').getContext('2d');
+    const idsChart = new Chart(idsCtx, {
+        type: 'line',
+        data: {
+            labels: Array(50).fill(""),
+            datasets: [{
+                data: Array(50).fill(0),
+                borderColor: '#2f81f7',
+                borderWidth: 2, pointRadius: 0, tension: 0.4, fill: true,
+                backgroundColor: 'rgba(47, 129, 247, 0.05)'
+            }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false, animation: false,
+            scales: { x: { display: false }, y: { min: 0, suggestedMax: 1, grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { color: '#8b949e' } } },
+            plugins: { legend: { display: false } }
+        }
+    });
+
+    let prevModelsStateStr = "";
+
+    function pollCore() {
+        // --- 1. HUD & Graph ---
+        fetch('/status').then(r => r.json()).then(data => {
+            document.getElementById('stat-packets').innerText = (data.pkts_total || 0).toLocaleString();
+            document.getElementById('stat-bytes').innerText = data.bytes_total_mb || 0;
+            document.getElementById('stat-score-max').innerText = (data.current_score || 0).toFixed(4);
+            document.getElementById('stat-interface').innerText = data.active_iface || "---";
+
+            const mode = document.getElementById('status-mode-text');
+            const dot = document.getElementById('live-dot');
+            const shutBtn = document.getElementById('btn-shutdown');
+            mode.innerText = data.mode || "DISCONNECTED";
+
+            const isRun = (data.mode && (data.mode.includes("ACTIVE") || data.mode.includes("MONITOR")));
+
+            if (isRun) {
+                if(data.is_anomaly) dot.className = 'dot-led alarm';
+                else dot.className = 'dot-led active';
+
+                shutBtn.style.display = 'block';
+                idsChart.data.datasets[0].data.push(data.current_score || 0);
+                idsChart.data.datasets[0].data.shift();
+
+                if (data.is_anomaly) idsChart.data.datasets[0].borderColor = '#f85149';
+                else idsChart.data.datasets[0].borderColor = '#3fb950';
+
+                idsChart.update('none');
+            } else {
+                dot.className = 'dot-led';
+                shutBtn.style.display = 'none';
+                idsChart.data.datasets[0].borderColor = '#2f81f7';
+            }
+
+            const term = document.getElementById('realtime-logs');
+            const logHtml = (data.log || []).map(l => {
+                let color = "color: #7ee787;";
+                if(l.includes("ALARM") || l.includes("ALERT") || l.includes("ERROR")) color = "color: #f85149;";
+                if(l.includes("READY")) color = "color: #58a6ff;";
+                return `<div><span style="opacity:0.3; margin-right:8px">></span> <span style="${color}">${l}</span></div>`;
+            }).join('');
+
+            if(term.innerHTML !== logHtml) {
+                term.innerHTML = logHtml;
+                term.scrollTop = term.scrollHeight;
+            }
+        });
+
+        // --- 2. Live Update for ML training ---
+        // Чтобы ползунок процентов обновлялся плавно без F5
+        fetch('/create_model', { method:'OPTIONS' }).then(()=>{ // Легкий костыль если API нет, лучше встроить в /status
+           // reload window is best right now based on complex python logic structure
+        }).catch(e=>{});
+    }
+
+    // Refresh model % without reloading full dashboard logic
+    setInterval(()=>{ location.reload(); }, 60000);
+
+    document.body.onclick = (e) => {
+        const btn = e.target.closest('button');
+        if(!btn) return;
+
+        const id = btn.dataset.id;
+        const iface = document.getElementById('interface-select').value;
+
+        if (btn.id === 'create-model-btn') {
+            const name = document.getElementById('model-name-input').value;
+            const type = document.getElementById('model-type-select').value;
+            if(!name) { alert("Выделите нейминг (ID) ядра ML."); return; }
+            fetch('/create_model', { method:'POST', headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({model_name:name, model_type:type, interface:iface})
+            }).then(() => location.reload());
+        }
+        if(btn.classList.contains('activate-btn')) {
+            fetch('/activate_model', { method:'POST', headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({model_id:id, interface:iface})
+            }).then(() => location.reload());
+        }
+        if(btn.id === 'btn-shutdown') {
+            fetch('/stop_monitoring', {method:'POST'}).then(() => location.reload());
+        }
+        if(btn.classList.contains('delete-btn')) {
+            if(confirm("Вы безвозвратно удалите модель (Ядро). Принять решение?")) {
+                fetch('/delete_model', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({model_id:id})}).then(() => location.reload());
+            }
+        }
+    };
+
+    setInterval(pollCore, 1500);
+</script>
+{% endblock %}

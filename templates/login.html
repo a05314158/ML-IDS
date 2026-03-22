@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container d-flex align-items-center justify-content-center" style="min-height: 80vh;">
+    <div class="ids-card p-5" style="width: 100%; max-width: 450px; box-shadow: 0 30px 60px rgba(0,0,0,0.5); border-color: rgba(255,255,255,0.08); background: rgba(22,27,34, 0.9);">
+        <div class="text-center mb-5">
+            <div class="bg-primary d-inline-block p-3 rounded-4 mb-3 shadow">
+                <i class="fa-solid fa-key text-white fs-3"></i>
+            </div>
+            <h3 class="fw-bold text-white mb-2">Оператор Аутентифицирован?</h3>
+            <p class="text-muted small text-uppercase fw-bold opacity-75" style="letter-spacing: 2px;">Identity Authorization Terminal</p>
+        </div>
+
+        <form method="POST" action="{{ url_for('login') }}">
+            <div class="mb-4">
+                <label class="ids-tiny-label d-block mb-2 text-primary opacity-75">EMAIL ADDRESS LAYER</label>
+                <input type="email" name="email" class="form-control bg-dark text-white border-secondary px-3 py-2 fw-bold" placeholder="auth@zero-trust.core" required autofocus>
+            </div>
+            <div class="mb-5">
+                <label class="ids-tiny-label d-block mb-2 text-primary opacity-75">DECRYPT KEY TOKEN (Пароль)</label>
+                <input type="password" name="password" class="form-control bg-dark text-white border-secondary px-3 py-2" placeholder="••••••••" required>
+            </div>
+
+            <button type="submit" class="btn btn-ids-primary w-100 py-3 fw-bolder mb-4 shadow" style="font-size: 13px; letter-spacing: 2px;">
+                ЗАГРУЗИТЬ ОПЕРАЦИОННУЮ ДЕКЛАРАЦИЮ (ENTER SOC)
+            </button>
+
+            <div class="text-center border-top border-secondary border-opacity-25 pt-4">
+                <a href="{{ url_for('register') }}" class="text-muted fw-bold text-decoration-none" style="font-size: 12px; transition:0.2s">
+                    <i class="fa-solid fa-lock-open me-1 opacity-50"></i> АКТИВИРОВАТЬ НОВЫЙ МОДУЛЬ УЧЕТНОЙ ЗАПИСИ
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

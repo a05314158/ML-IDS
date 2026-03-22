@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  # База данных
+  db:
+    image: postgres:15
+    container_name: ids_postgres
+    environment:
+      POSTGRES_USER: ids_user
+      POSTGRES_PASSWORD: ids_password
+      POSTGRES_DB: ids_db
+    ports:
+      - "5432:5443"
+
+  # Брокер сообщений (Почтовый ящик для данных с роутера)
+  redis:
+    image: redis:7
+    container_name: ids_redis
+    ports:
+      - "6379:6379"
+
+  # Основное веб-приложение (Flask)
+  web:
+    build: .
+    container_name: ids_web
+    restart: always
+    command: python app.py
+    volumes:
+      - .:/app
+    ports:
+      - "5000:5000"
+    environment:
+      - DATABASE_URL=postgresql://ids_user:ids_password@db:5432/ids_db
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - db
+      - redis
+
+  # Воркер (Мозг, который считает ML в фоне)
+  worker:
+    build: .
+    container_name: ids_worker
+    restart: always
+    command: celery -A app.celery_app worker --loglevel=info
+    volumes:
+      - .:/app
+    environment:
+      - DATABASE_URL=postgresql://ids_user:ids_password@db:5432/ids_db
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - db
+      - redis

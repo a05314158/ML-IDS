@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="ru" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ML-IDS Security Platform</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+    :root {
+        /* ТЕМНАЯ: Истинная глубина */
+        --ids-bg: #010409;
+        --ids-body: #0d1117;
+        --ids-card: #161b22;
+        --ids-text-head: #ffffff;
+        --ids-text-body: #8b949e;
+        --ids-border: #30363d;
+        --ids-accent: #2f81f7;
+        --ids-accent-glow: rgba(47, 129, 247, 0.2);
+    }
+
+    [data-bs-theme="light"] {
+        /* СВЕТЛАЯ: Чистый Офис */
+        --ids-bg: #f0f2f5;
+        --ids-body: #f6f8fa;
+        --ids-card: #ffffff;
+        --ids-text-head: #1a1f23;
+        --ids-text-body: #57606a;
+        --ids-border: rgba(31, 35, 40, 0.12);
+        --ids-accent: #0969da;
+        --ids-accent-glow: rgba(9, 105, 218, 0.15);
+    }
+
+    body {
+        font-family: 'Plus Jakarta Sans', sans-serif;
+        background-color: var(--ids-body);
+        color: var(--ids-text-body);
+        -webkit-font-smoothing: antialiased;
+        overflow-x: hidden;
+    }
+
+    /* Типографика */
+    h1, h2, h3, h4, h5, h6, .ids-heading { color: var(--ids-text-head) !important; font-weight: 700; letter-spacing: -0.5px; }
+    .mono-font { font-family: 'JetBrains Mono', monospace; }
+    .ids-tiny-label { font-size: 10px; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; color: var(--ids-text-body); }
+
+    /* Глобальные Карточки (SOC Cards) */
+    .ids-card {
+        background: var(--ids-card);
+        border: 1px solid var(--ids-border);
+        border-radius: 16px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+        transition: transform 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+    }
+    .ids-card:hover {
+        border-color: var(--ids-accent);
+        box-shadow: 0 8px 30px var(--ids-accent-glow);
+    }
+
+    /* Навигация (Glassmorphism) */
+    .navbar {
+        background: rgba(var(--ids-card), 0.8) !important;
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border-bottom: 1px solid var(--ids-border);
+        padding: 15px 0;
+        position: sticky; top: 0; z-index: 1000;
+    }
+    .navbar-brand span { color: var(--ids-text-head); font-weight: 800; letter-spacing: 1px; }
+    .nav-link { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: var(--ids-text-body) !important; transition: 0.2s; padding: 8px 16px !important; border-radius: 8px; margin: 0 5px; }
+    .nav-link:hover, .nav-link.active { color: var(--ids-accent) !important; background: var(--ids-accent-glow); }
+
+    /* Кнопки и контролы */
+    .theme-btn { cursor: pointer; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: var(--ids-card); border: 1px solid var(--ids-border); color: var(--ids-text-head); transition: 0.3s; }
+    .theme-btn:hover { background: var(--ids-accent); color: #fff; border-color: var(--ids-accent); transform: rotate(15deg); }
+
+    .btn-ids-primary { background: var(--ids-accent); color: #fff !important; border-radius: 10px; font-weight: 700; transition: 0.3s; text-decoration: none; display: inline-block; text-align: center; border: none; }
+    .btn-ids-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 20px var(--ids-accent-glow); }
+
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: var(--ids-body); }
+    ::-webkit-scrollbar-thumb { background: var(--ids-border); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--ids-accent); }
+
+    .alert-ids { border: none; border-left: 4px solid; border-radius: 12px; background: var(--ids-card); box-shadow: 0 10px 30px rgba(0,0,0,0.1); margin-top: 20px; color: var(--ids-text-head); }
+    .alert-success { border-left-color: #3fb950; }
+    .alert-danger { border-left-color: #f85149; }
+</style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg">
+        <div class="container-fluid px-4">
+            <a class="navbar-brand d-flex align-items-center gap-2" href="{{ url_for('home') }}">
+                <div class="bg-primary bg-opacity-10 p-2 rounded-3 text-primary d-flex align-items-center justify-content-center">
+                    <i class="fa-solid fa-shield-halved"></i>
+                </div>
+                <span>ML-IDS <span class="badge bg-danger rounded-pill ms-1" style="font-size: 9px; vertical-align: middle;">CORE</span></span>
+            </a>
+
+            <div class="collapse navbar-collapse" id="ids-nav">
+                <div class="navbar-nav mx-auto">
+                    {% if current_user.is_authenticated %}
+                    <a class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}" href="{{ url_for('dashboard') }}"><i class="fa-solid fa-chart-line me-2"></i>Панель</a>
+                    <a class="nav-link {% if request.endpoint == 'productivity' %}active{% endif %}" href="{{ url_for('productivity') }}"><i class="fa-solid fa-user-shield me-2"></i>Аудит Времени</a>
+                    <a class="nav-link {% if request.endpoint == 'statistics' %}active{% endif %}" href="{{ url_for('statistics') }}"><i class="fa-solid fa-network-wired me-2"></i>Узлы Сети</a>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="d-flex align-items-center gap-3">
+                <div id="toggle-theme" class="theme-btn"><i class="fa-solid fa-moon"></i></div>
+                {% if current_user.is_authenticated %}
+                <a href="{{ url_for('profile') }}" class="text-decoration-none">
+                    <div class="d-none d-lg-flex align-items-center gap-2 ids-card px-3 py-1 rounded-pill" style="border: 1px solid var(--ids-border); cursor:pointer;">
+                        <i class="fa-solid fa-circle-user text-primary fs-5"></i>
+                        <span class="small fw-bold text-white">{{ current_user.username }}</span>
+                    </div>
+                </a>
+                <a href="{{ url_for('logout') }}" class="btn btn-outline-danger btn-sm rounded-pill px-3 fw-bold" style="font-size: 11px; letter-spacing: 1px;">ВЫЙТИ</a>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid">
+        {% with msgs = get_flashed_messages(with_categories=true) %}
+          {% if msgs %}
+            <div class="position-fixed top-0 end-0 p-3" style="z-index: 1050; margin-top: 60px;">
+            {% for cat, msg in msgs %}
+              <div class="alert-ids alert alert-{{cat}} d-flex align-items-center px-4 py-3 shadow-lg" role="alert">
+                  <i class="fa-solid {% if cat == 'success' %}fa-check-circle text-success{% else %}fa-circle-exclamation text-danger{% endif %} me-3 fs-4"></i>
+                  <div class="fw-bold">{{ msg }}</div>
+              </div>
+            {% endfor %}
+            </div>
+          {% endif %}
+        {% endwith %}
+    </div>
+
+    <main id="main-container" class="pb-5">{% block content %}{% endblock %}</main>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const btn = document.getElementById('toggle-theme');
+        const icon = btn.querySelector('i');
+        const html = document.documentElement;
+
+        btn.onclick = () => {
+            const isDark = html.getAttribute('data-bs-theme') === 'dark';
+            const theme = isDark ? 'light' : 'dark';
+            html.setAttribute('data-bs-theme', theme);
+            localStorage.setItem('ids_theme', theme);
+            icon.className = isDark ? 'fa-solid fa-sun' : 'fa-solid fa-moon';
+        };
+
+        const currentTheme = localStorage.getItem('ids_theme') || 'dark';
+        html.setAttribute('data-bs-theme', currentTheme);
+        icon.className = currentTheme === 'dark' ? 'fa-solid fa-moon' : 'fa-solid fa-sun';
+    </script>
+</body>
+</html>

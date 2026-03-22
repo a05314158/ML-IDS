@@ -1,0 +1,30 @@
+# Виртуальное окружение (самое тяжелое и не нужное на гите)
+.venv/
+venv/
+ENV/
+
+# Кэш Python
+**/__pycache__/
+*.py[cod]
+
+# Базы данных (Postgres хранится в Docker, SQLite нам больше не нужна)
+*.db
+instance/
+
+# Обученные модели (они весят много, их лучше переносить руками или через Git LFS)
+models/user_*/
+models/*.keras
+models/*.joblib
+
+# Логи и временные файлы воркера
+logs/
+run/
+worker_status_*.json
+*.tmp
+
+# Секретные ключи
+.env
+
+# Папки IDE
+.vscode/
+.idea/

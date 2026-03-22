@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-5" style="max-width: 1000px;">
+    <div class="row mb-4 align-items-center">
+        <div class="col-md-8">
+            <h2 class="fw-bolder mb-1"><i class="fa-solid fa-id-badge text-primary me-3"></i>Идентификация Оператора SOC</h2>
+            <p class="text-muted small text-uppercase letter-spacing-1">Центр настройки личных преференсов и профиля ядра (System Layer)</p>
+        </div>
+        <div class="col-md-4 text-md-end">
+            <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 px-3 py-2 rounded-pill fw-bold">
+                <i class="fa-solid fa-fingerprint me-2"></i>БИОМЕТРИКА УСПЕШНА (AUTH)
+            </span>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <!-- АВАТАР И СТАТУС -->
+        <div class="col-lg-5">
+            <div class="ids-card p-5 h-100 text-center position-relative overflow-hidden shadow">
+                <!-- Glowing bg ball -->
+                <div class="position-absolute bg-primary rounded-circle" style="width: 150px; height: 150px; filter: blur(80px); opacity: 0.15; top: -50px; left: 50%;"></div>
+
+                <div class="d-inline-flex justify-content-center align-items-center rounded-circle bg-dark border border-secondary shadow-lg border-opacity-50 mb-4" style="width: 120px; height: 120px; z-index:5;">
+                    <i class="fa-solid fa-user-astronaut text-primary" style="font-size: 50px;"></i>
+                </div>
+
+                <h4 class="fw-bolder mb-0 text-white">{{ current_user.username }}</h4>
+                <p class="ids-tiny-label opacity-75 mt-2 mb-4 d-inline-flex align-items-center gap-2 px-3 py-1 rounded-pill bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25"><i class="fa-solid fa-envelope"></i> {{ current_user.email }}</p>
+
+                <hr class="border-secondary border-opacity-50 my-4 w-75 mx-auto">
+
+                <div class="px-3">
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="text-muted small fw-bold"><i class="fa-solid fa-layer-group me-1 opacity-50"></i> System Clearance</span>
+                        <span class="fw-bold text-warning mono-font px-2 bg-warning bg-opacity-10 border border-warning border-opacity-25 rounded" style="font-size:12px;"> ROOT (LEVEL 5) </span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2 mt-3">
+                        <span class="text-muted small fw-bold"><i class="fa-solid fa-fingerprint me-1 opacity-50"></i> Registry ID #</span>
+                        <span class="fw-bold text-white mono-font px-2 bg-dark rounded border border-secondary" style="font-size:12px;"> {{ "%05d" % current_user.id }} </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ГЛОБАЛЬНЫЕ РЕСУРСЫ ЯДРА НА ЭТОГО ОПЕРАТОРА -->
+        <div class="col-lg-7 d-flex flex-column gap-4">
+
+            <div class="ids-card p-4 shadow-sm border-primary border-opacity-25 bg-primary bg-opacity-5">
+                <h6 class="ids-tiny-label text-primary mb-3"><i class="fa-solid fa-bolt text-primary me-2"></i>КОРПОРАТИВНЫЕ LIMIT RESOURCES КВОТЫ</h6>
+
+                <p class="small text-muted mb-4" style="line-height:1.6">Каждому ROOT оператору выделяется независимый виртуальный контейнер обучения. Регулировка гиперпараметров осуществляется напрямую из <b>Global Settings JSON.</b></p>
+
+                <div class="d-flex justify-content-between text-muted align-items-center px-4 py-2 border-bottom border-secondary border-opacity-25">
+                    <span class="small fw-bold">Аппаратное ML Ускорение (GPU)</span><span class="badge bg-success bg-opacity-10 text-success fw-bold px-2 border-0">ACTIVATED <i class="fa-brands fa-envira ms-1"></i></span>
+                </div>
+                <div class="d-flex justify-content-between text-muted align-items-center px-4 py-3 border-bottom border-secondary border-opacity-25">
+                    <span class="small fw-bold">Длительность захвата БазОбучения (TF)</span><span class="fw-bold mono-font text-white bg-dark px-2 rounded"> ~ {{ 60 }} MIN WINDOW </span>
+                </div>
+                <div class="d-flex justify-content-between text-muted align-items-center px-4 py-3">
+                    <span class="small fw-bold">Isolation Contamination % Угроз</span><span class="fw-bold mono-font text-danger bg-danger bg-opacity-10 border border-danger border-opacity-25 px-2 rounded"> THRESHOLD <i class="fa-solid fa-chevron-right fs-6 ms-1 me-1 text-danger"></i> 5.0 % </span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
